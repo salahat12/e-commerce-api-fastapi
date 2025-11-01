@@ -1,40 +1,23 @@
-import mysql.connector
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends
+from database import engine, Base, SessionLocal
+from models import User
+from schemas import UserCreate
+from sqlalchemy.orm import Session
 
-app = FastAPI(title="E-Commerce API")
+Base.metadata.create_all(bind=engine)
+app = FastAPI()
 
-db_config = {
-    "host": "localhost",
-    "user": "root",
-    "password": "YOUR_ROOT_PASSWORD",
-    "database": "fastapi_db"
-}
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class Product(BaseModel):
-    name: str
-    price: float
-    in_stock: bool = True
-
-@app.post("/products/")
-def create_product(product: Product):
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO products (name, price, in_stock) VALUES (%s, %s, %s)",
-        (product.name, product.price, product.in_stock)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return {"message": "Product created"}
-
-@app.get("/products/")
-def get_products():
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM products")
-    results = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return results
+@app.post("/users/")
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = User(username=user.username, password=user.password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
